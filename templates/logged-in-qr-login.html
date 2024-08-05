@@ -17,17 +17,18 @@
 
       <div id="menu-bar" class="menu-bar">
         <a class="menu-link inactive" href="/make-change">Make Change</a>
-        <a class="menu-link" href="/account">Account</a>
-        <a class="menu-link inactive" href="/logged-in-qr-login">Log In On Mobile Device</a>
+        <a class="menu-link inactive" href="/account">Account</a>
+        <a class="menu-link" href="/logged-in-qr-login">Log In On Mobile Device</a>
       </div>
     </div>
 
     <div style="flex: 1;">
-      <!-- Application page -->
       <div class="column-container">
-        <div class="app-container">
-          <h3>Your balance</h3>
-          <div class="balance">$0.00</div>
+        <div class="app-container change-container">
+          <h3>Login On Your Device</h3>
+
+          <p>{{qrimg|safe}}</p>
+
         </div>
       </div>
     </div>

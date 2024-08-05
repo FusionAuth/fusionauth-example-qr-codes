@@ -2,6 +2,7 @@
   "variables": {
     "applicationId": "E9FDB985-9173-4E01-9D73-AC2D60D1DC8E",
     "apiKey": "this_really_should_be_a_long_random_alphanumeric_value_but_this_still_works",
+    "magicLinkApiKey": "magic_link_api_key_replace_for_prod",
     "asymmetricKeyId": "#{UUID()}",
     "newThemeId": "#{UUID()}",
     "defaultTenantId": "d7d09513-a3f5-401c-9685-34ab6c552453",
@@ -15,6 +16,17 @@
     {
       "key": "#{apiKey}",
       "description": "Unrestricted API key"
+    },
+    {
+      "key": "#{magicLinkApiKey}",
+      "description": "Ony used for starting magic link process",
+      "permissions": {
+        "endpoints": {
+          "/api/passwordless/start": [
+            "POST"
+          ]
+        }
+      }
     }
   ],
   "requests": [
@@ -75,6 +87,9 @@
       "body": {
         "application": {
           "name": "Example app",
+          "passwordlessConfiguration": {
+            "enabled": true
+          },
           "oauthConfiguration": {
             "authorizedRedirectURLs": [
               "http://localhost:5000/callback",
@@ -87,10 +102,12 @@
             "logoutURL": "http://localhost:5000/logout",
             "enabledGrants": [
               "authorization_code",
-              "refresh_token"
+              "refresh_token",
+              "urn:ietf:params:oauth:grant-type:device_code"
             ],
             "debug": true,
             "generateRefreshTokens": true,
+            "deviceVerificationURL": "http://localhost:9011/oauth2/device",
             "requireRegistration": true
           },
           "jwtConfiguration": {
