@@ -25,14 +25,6 @@ if ENV_FILE:
 app = Flask(__name__)
 app.secret_key = env.get("APP_SECRET_KEY")
 
-#TODO
-# need to finish up device grant when we have ngrok
-# need to poll 
-# need to have response that returns json redirect when the device grant is completed
-# bounce to another flask route, which sets cookies, and then bounces to /
-# test that the polling thread waits
-
-
 oauth = OAuth(app)
 
 oauth.register(
