@@ -217,49 +217,6 @@ def logged_out_qr_login():
     qrimg=qrimg)
 
 #
-# This is the page displayed when you are logged in on your laptop but want to login using a QR code on your phone with magic link
-#
-@app.route("/logged-in-qr-login")
-def logged_in_qr_login():
-  # NOTE this has the CSRF issue with the authlib. Depending on your library, you may be able to turn off CSRF protection. Otherwise you'd need to implement the device grant the other way. (If the user is logged in on their laptop and wants to log in with the phone, the phone would need to start the grant and display a URL, the laptop would need to go to that URL, and the phone would need to poll the token endpoint to see when the laptop had completed the grant.)
-
-  access_token = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME, None)
-  refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME, None)
-
-  user = session["user"]
-
-  if access_token is None:
-    return redirect(get_logout_url())
-
-  state = {}
-  state['redirect_uri'] = url_for("callback", _scheme='https', _external=True)
-  state['client_id'] = env.get("CLIENT_ID")
-  state['response_type'] = 'code'
-  passwordless_request = {
-    'loginId': user["email"],
-    'applicationId': env.get("CLIENT_ID"),
-    'state': state
-  }
-
-  response = client.start_passwordless_login(passwordless_request)
-  if response.error_response:
-    print("in error")
-    print(response.error_response)
-  response_json = response.success_response
-  code = response_json["code"]
-
-  qr = qrcode.QRCode(image_factory=qrcode.image.svg.SvgPathImage)
-
-  login_start_url = env.get("ISSUER") + '/oauth2/passwordless/' +code+ '?postMethod=true'
-
-  qr.add_data(login_start_url)
-  qr.make(fit=True)
-  qrimg = qr.make_image().to_string(encoding='unicode')
-  return render_template(
-    "logged-in-qr-login.html",
-    qrimg=qrimg)
-
-#
 # Takes a dollar amount and converts it to change
 #
 #tag::makeChangeRoute[]
