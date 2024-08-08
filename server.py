@@ -39,7 +39,7 @@ oauth.register(
   server_metadata_url=f'{env.get("ISSUER")}/.well-known/openid-configuration'
 )
 
-client = FusionAuthClient(env.get("API_KEY"), env.get("ISSUER"))
+client = FusionAuthClient("apikeynotneeded", env.get("ISSUER"))
 
 polling_data = {'content': '', 'code': '', 'interval': 5}
 polling_lock = threading.Lock()

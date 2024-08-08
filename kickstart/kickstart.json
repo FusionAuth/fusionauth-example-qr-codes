@@ -2,7 +2,6 @@
   "variables": {
     "applicationId": "E9FDB985-9173-4E01-9D73-AC2D60D1DC8E",
     "apiKey": "this_really_should_be_a_long_random_alphanumeric_value_but_this_still_works",
-    "magicLinkApiKey": "magic_link_api_key_replace_for_prod",
     "issuer_url": "https://d9d5-73-249-72-110.ngrok-free.app",
     "app_url": "https://bccb-73-249-72-110.ngrok-free.app",
     "asymmetricKeyId": "#{UUID()}",
