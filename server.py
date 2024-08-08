@@ -25,6 +25,14 @@ if ENV_FILE:
 app = Flask(__name__)
 app.secret_key = env.get("APP_SECRET_KEY")
 
+#TODO
+# need to finish up device grant when we have ngrok
+# need to poll 
+# need to have response that returns json redirect when the device grant is completed
+# bounce to another flask route, which sets cookies, and then bounces to /
+# test that the polling thread waits
+
+
 oauth = OAuth(app)
 
 oauth.register(
@@ -32,6 +40,19 @@ oauth.register(
   client_id=env.get("CLIENT_ID"),
   client_secret=env.get("CLIENT_SECRET"),
   client_kwargs={
+  ##  'verify': False,
+    "scope": "openid email profile offline_access",
+    'code_challenge_method': 'S256' # This enables PKCE
+  },
+  server_metadata_url=f'{env.get("ISSUER")}/.well-known/openid-configuration'
+)
+
+oauth.register(
+  "FusionAuthMagicLink",
+  client_id=env.get("CLIENT_ID"),
+  client_secret=env.get("CLIENT_SECRET"),
+  client_kwargs={
+  ##  'verify': False,
     "scope": "openid email profile offline_access",
     'code_challenge_method': 'S256' # This enables PKCE
   },
@@ -40,39 +61,40 @@ oauth.register(
 
 client = FusionAuthClient(env.get("API_KEY"), env.get("ISSUER"))
 
-polling_data = {'content': '', 'url': 'https://api.example.com/data', 'interval': 10}
+polling_data = {'content': '', 'code': '', 'interval': 5}
 polling_lock = threading.Lock()
+stop_event = threading.Event()
+polling_thread = None
 
-def poll_url():
-    while True:
+def poll_url(stop_event):
+    print("starting polling")
+    while not stop_event.is_set():
         with polling_lock:
             interval = polling_data['interval']
         try:
-            token_url = env.get("ISSUER")
+            print("in polling loop")
+            print(polling_data['code'])
             data = {
               "client_id": env.get("CLIENT_ID"),
-              "grant_type": "urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code"
- 
+              "device_code": polling_data['code'],
+              "grant_type": "urn:ietf:params:oauth:grant-type:device_code"
             }
 
-            response = requests.get('http://localhost:9011/oauth2/token')
+            device_token_url = env.get("ISSUER")+'/oauth2/token'
+            print("polling token endpoint")
+            print(device_token_url)
+            response = requests.post(device_token_url, headers={},data=data)
+            print(response.json())
             if response.status_code == 200:
-              print("request received")
-              polling_data['content'] = response.text
+              print("request posted")
+              polling_data['content'] = response.json()
         except Exception as e:
             polling_data['content'] = f"Error: {e}"
-        time.sleep(interval)
+        stop_event.wait(interval)
 
-
-if __name__ == "__main__":
-  polling_thread = threading.Thread(target=poll_url, daemon=True)
-  polling_thread.start()
-  app.run(host="0.0.0.0", port=env.get("PORT", 5000))
 
 def get_logout_url():
   return env.get("ISSUER") + "/oauth2/logout?" + urlencode({"client_id": env.get("CLIENT_ID")},quote_via=quote_plus)
-#end::baseApplication[]
-
 
 #tag::homeRoute[]
 @app.route("/")
@@ -84,21 +106,53 @@ def home():
   return render_template("home.html")
 #end::homeRoute[]
 
-@app.route("/device_grant_data")
-def device_grant_data():
-    content = "n/a"
+@app.route("/device_grant_finished")
+def device_grant_finished():
+    print("device_grant_finished")
+    content = ""
     with polling_lock:
-        content = polling_data['content']
-    print(content)
-    return ""
-#end::homeRoute[]
+      content = polling_data['content']
+    try:
+      if content != "":
+        print("returning reload signal, stopping polling")
+        stop_event.set() 
+        if polling_thread != None:
+          polling_thread.join()  # Wait for the thread to finish
+        else:
+          print("polling thread none?")
+        return json.loads('{"reload":"true"}'), 200
+    except Exception as e:
+      content = ""
 
+
+    return json.loads('{}'), 200
+
+@app.route("/reload")
+def reload():
+    print("reload")
+    content = ""
+    with polling_lock:
+      content = polling_data['content']
+    try:
+      # set the cookies, then refresh to /
+      token = content
+      userinfo = client.retrieve_user_info_from_access_token(token["access_token"]).success_response
+      print(userinfo)
+      token["userinfo"] = userinfo
+
+      resp = make_response(redirect("/"))
+      return process_token(token, resp)
+
+    except Exception as e:
+      content = ""
+    # something has gone awry, but lets just send the user to / anyway. they won't be logged in
+    return make_response(redirect("/"))
 
 #tag::loginRoute[]
 @app.route("/login")
 def login():
   return oauth.FusionAuth.authorize_redirect(
-    redirect_uri=url_for("callback", _external=True)
+    redirect_uri=url_for("callback", _scheme='https', _external=True)
   )
 #end::loginRoute[]
 
@@ -107,16 +161,18 @@ def login():
 @app.route("/callback")
 def callback():
   token = oauth.FusionAuth.authorize_access_token()
-
   resp = make_response(redirect("/"))
 
-  resp.set_cookie(ACCESS_TOKEN_COOKIE_NAME, token["access_token"], max_age=token["expires_in"], httponly=True, samesite="Lax")
-  resp.set_cookie(REFRESH_TOKEN_COOKIE_NAME, token["refresh_token"], max_age=token["expires_in"], httponly=True, samesite="Lax")
-  resp.set_cookie(USERINFO_COOKIE_NAME, json.dumps(token["userinfo"]), max_age=token["expires_in"], httponly=False, samesite="Lax")
-  session["user"] = token["userinfo"]
+  return process_token(token, resp)
 
-  return resp
 #end::callbackRoute[]
+
+@app.route("/callbackMagic")
+def callbackMagic():
+  token = oauth.FusionAuthMagicLink.authorize_access_token()
+  resp = make_response(redirect("/"))
+
+  return process_token(token, resp)
 
 
 #tag::logoutRoute[]
@@ -159,21 +215,46 @@ def logged_out_qr_login():
   qr = qrcode.QRCode(image_factory=qrcode.image.svg.SvgPathImage)
 
   device_start_url = env.get("ISSUER") + '/oauth2/device_authorize'
-  data = { "client_id": env.get("CLIENT_ID") }
-  r = requests.post(device_start_url,headers={},data=data)
-  verification_url_complete = r.json()['verification_uri_complete']
+  data = { 
+    "client_id": env.get("CLIENT_ID"),
+    "scope": "openid email profile offline_access",
+  }
+  response = requests.post(device_start_url,headers={},data=data)
+  verification_url_complete = response.json()['verification_uri_complete']
+  print(verification_url_complete)
+  device_code = response.json()['device_code']
+  print(device_code)
+
+  with polling_lock:
+    polling_data['code'] = device_code
+  try:
+    print("in lock")
+    print(polling_data['code'])
+  except Exception as e:
+    print(f"Error: {e}")
+
   qr.add_data(verification_url_complete)
   qr.make(fit=True)
-  qrimg = qr.make_image(attrib={'class': 'some-css-class'}).to_string(encoding='unicode')
+  qrimg = qr.make_image().to_string(encoding='unicode')
   return render_template(
     "logged-out-qr-login.html",
     qrimg=qrimg)
 
 #
-# This is the page displayed when you are logged in on your laptop but want to login using a QR code on your phone
+# This is the page displayed when you are logged in on your laptop but want to login using a QR code on your phone with device grant
 #
 @app.route("/logged-in-qr-login")
 def logged_in_qr_login():
+  return render_template(
+    "logged-out-qr-login.html"
+    )
+#
+# This is the page displayed when you are logged in on your laptop but want to login using a QR code on your phone with magic link
+#
+@app.route("/logged-in-qr-login-magic-link")
+def logged_in_qr_login_magic_link():
+  # this has the CSRF issue with the authlib. Depending on your library, you may be able to turn off CSRF protection.
+
   access_token = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME, None)
   refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME, None)
 
@@ -182,9 +263,22 @@ def logged_in_qr_login():
   if access_token is None:
     return redirect(get_logout_url())
 
+  print(session.keys())
+  
+  st = 'abc'
+  state = {}
+  s = oauth.FusionAuthMagicLink.create_authorization_url(
+    redirect_uri=url_for("callback", _scheme='https', _external=True)
+  )
+  print(s)
+  state['redirect_uri'] = url_for("callbackMagic", _scheme='https', _external=True)
+  state['client_id'] = env.get("CLIENT_ID")
+  state['response_type'] = 'code'
+  state['state'] = st
   passwordless_request = {
     'loginId': user["email"],
-    'applicationId': env.get("CLIENT_ID")
+    'applicationId': env.get("CLIENT_ID"),
+    'state': state
   }
 
   response = client.start_passwordless_login(passwordless_request)
@@ -196,13 +290,13 @@ def logged_in_qr_login():
 
   qr = qrcode.QRCode(image_factory=qrcode.image.svg.SvgPathImage)
 
-  login_start_url = env.get("ISSUER") + '/oauth2/passwordless/' +code+ ' ?postMethod=true'
+  login_start_url = env.get("ISSUER") + '/oauth2/passwordless/' +code+ '?postMethod=true'
 
   qr.add_data(login_start_url)
   qr.make(fit=True)
-  qrimg = qr.make_image(attrib={'class': 'some-css-class'}).to_string(encoding='unicode')
+  qrimg = qr.make_image().to_string(encoding='unicode')
   return render_template(
-    "logged-in-qr-login.html",
+    "logged-in-qr-login-magic.html",
     qrimg=qrimg)
 
 
@@ -245,3 +339,20 @@ def make_change():
     change=change,
     logoutUrl=get_logout_url())
 #end::makeChangeRoute[]
+
+
+def process_token(token, resp):
+
+  resp.set_cookie(ACCESS_TOKEN_COOKIE_NAME, token["access_token"], max_age=token["expires_in"], httponly=True, samesite="Lax")
+  resp.set_cookie(REFRESH_TOKEN_COOKIE_NAME, token["refresh_token"], max_age=token["expires_in"], httponly=True, samesite="Lax")
+  resp.set_cookie(USERINFO_COOKIE_NAME, json.dumps(token["userinfo"]), max_age=token["expires_in"], httponly=False, samesite="Lax")
+  session["user"] = token["userinfo"]
+
+  return resp
+
+if __name__ == "__main__":
+  polling_thread = threading.Thread(target=poll_url, args=(stop_event,))
+  polling_thread.daemon = True
+  polling_thread.start()
+  app.run(host="0.0.0.0", port=env.get("PORT", 5000))
+
