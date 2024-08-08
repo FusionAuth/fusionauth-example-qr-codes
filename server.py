@@ -13,7 +13,6 @@ import threading
 import time
 from fusionauth.fusionauth_client import FusionAuthClient
 
-
 ACCESS_TOKEN_COOKIE_NAME = "cb_access_token"
 REFRESH_TOKEN_COOKIE_NAME = "cb_refresh_token"
 USERINFO_COOKIE_NAME = "cb_userinfo"
@@ -41,11 +40,14 @@ oauth.register(
 
 client = FusionAuthClient("apikeynotneeded", env.get("ISSUER"))
 
+#tag::pollingSetup[]
 polling_data = {'content': '', 'code': '', 'interval': 5}
 polling_lock = threading.Lock()
 stop_event = threading.Event()
 polling_thread = None
+#end::pollingSetup[]
 
+#tag::pollUrl[]
 def poll_url(stop_event):
     #print("starting polling")
     while not stop_event.is_set():
@@ -71,6 +73,7 @@ def poll_url(stop_event):
         except Exception as e:
             polling_data['content'] = f"Error: {e}"
         stop_event.wait(interval)
+#end::pollUrl[]
 
 
 def get_logout_url():
@@ -86,6 +89,7 @@ def home():
   return render_template("home.html")
 #end::homeRoute[]
 
+#end::deviceGrantFinished[]
 @app.route("/device_grant_finished")
 def device_grant_finished():
     #print("device_grant_finished")
@@ -103,10 +107,10 @@ def device_grant_finished():
         return json.loads('{"reload":"true"}'), 200
     except Exception as e:
       content = ""
-
-
     return json.loads('{}'), 200
+#end::deviceGrantFinished[]
 
+#tag::reload[]
 @app.route("/reload")
 def reload():
     #print("reload")
@@ -127,6 +131,7 @@ def reload():
       content = ""
     # something has gone awry, but lets just send the user to / anyway. they won't be logged in
     return make_response(redirect("/"))
+#end::loginRoute[]
 
 #tag::loginRoute[]
 @app.route("/login")
@@ -182,6 +187,8 @@ def account():
 #
 # This is the page displayed when you are logged out on your laptop but want to login with a QR code read by the phone
 #
+
+#tag::loggedOutQRLogin[]
 @app.route("/logged-out-qr-login")
 def logged_out_qr_login():
   polling_thread = threading.Thread(target=poll_url, args=(stop_event,))
@@ -215,6 +222,7 @@ def logged_out_qr_login():
   return render_template(
     "logged-out-qr-login.html",
     qrimg=qrimg)
+#end::loggedOutQRLogin[]
 
 #
 # Takes a dollar amount and converts it to change
