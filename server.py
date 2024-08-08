@@ -47,18 +47,6 @@ oauth.register(
   server_metadata_url=f'{env.get("ISSUER")}/.well-known/openid-configuration'
 )
 
-oauth.register(
-  "FusionAuthMagicLink",
-  client_id=env.get("CLIENT_ID"),
-  client_secret=env.get("CLIENT_SECRET"),
-  client_kwargs={
-  ##  'verify': False,
-    "scope": "openid email profile offline_access",
-    'code_challenge_method': 'S256' # This enables PKCE
-  },
-  server_metadata_url=f'{env.get("ISSUER")}/.well-known/openid-configuration'
-)
-
 client = FusionAuthClient(env.get("API_KEY"), env.get("ISSUER"))
 
 polling_data = {'content': '', 'code': '', 'interval': 5}
@@ -67,13 +55,13 @@ stop_event = threading.Event()
 polling_thread = None
 
 def poll_url(stop_event):
-    print("starting polling")
+    #print("starting polling")
     while not stop_event.is_set():
         with polling_lock:
             interval = polling_data['interval']
         try:
-            print("in polling loop")
-            print(polling_data['code'])
+            #print("in polling loop")
+            #print(polling_data['code'])
             data = {
               "client_id": env.get("CLIENT_ID"),
               "device_code": polling_data['code'],
@@ -81,12 +69,12 @@ def poll_url(stop_event):
             }
 
             device_token_url = env.get("ISSUER")+'/oauth2/token'
-            print("polling token endpoint")
-            print(device_token_url)
+            #print("polling token endpoint")
+            #print(device_token_url)
             response = requests.post(device_token_url, headers={},data=data)
-            print(response.json())
+            #print(response.json())
             if response.status_code == 200:
-              print("request posted")
+              #print("request posted")
               polling_data['content'] = response.json()
         except Exception as e:
             polling_data['content'] = f"Error: {e}"
@@ -108,13 +96,13 @@ def home():
 
 @app.route("/device_grant_finished")
 def device_grant_finished():
-    print("device_grant_finished")
+    #print("device_grant_finished")
     content = ""
     with polling_lock:
       content = polling_data['content']
     try:
       if content != "":
-        print("returning reload signal, stopping polling")
+        #print("returning reload signal, stopping polling")
         stop_event.set() 
         if polling_thread != None:
           polling_thread.join()  # Wait for the thread to finish
@@ -129,7 +117,7 @@ def device_grant_finished():
 
 @app.route("/reload")
 def reload():
-    print("reload")
+    #print("reload")
     content = ""
     with polling_lock:
       content = polling_data['content']
@@ -166,14 +154,6 @@ def callback():
   return process_token(token, resp)
 
 #end::callbackRoute[]
-
-@app.route("/callbackMagic")
-def callbackMagic():
-  token = oauth.FusionAuthMagicLink.authorize_access_token()
-  resp = make_response(redirect("/"))
-
-  return process_token(token, resp)
-
 
 #tag::logoutRoute[]
 @app.route("/logout")
@@ -212,6 +192,10 @@ def account():
 #
 @app.route("/logged-out-qr-login")
 def logged_out_qr_login():
+  polling_thread = threading.Thread(target=poll_url, args=(stop_event,))
+  polling_thread.daemon = True
+  polling_thread.start()
+
   qr = qrcode.QRCode(image_factory=qrcode.image.svg.SvgPathImage)
 
   device_start_url = env.get("ISSUER") + '/oauth2/device_authorize'
@@ -221,14 +205,14 @@ def logged_out_qr_login():
   }
   response = requests.post(device_start_url,headers={},data=data)
   verification_url_complete = response.json()['verification_uri_complete']
-  print(verification_url_complete)
+  #print(verification_url_complete)
   device_code = response.json()['device_code']
-  print(device_code)
+  #print(device_code)
 
   with polling_lock:
     polling_data['code'] = device_code
   try:
-    print("in lock")
+    #print("in lock")
     print(polling_data['code'])
   except Exception as e:
     print(f"Error: {e}")
@@ -241,19 +225,11 @@ def logged_out_qr_login():
     qrimg=qrimg)
 
 #
-# This is the page displayed when you are logged in on your laptop but want to login using a QR code on your phone with device grant
+# This is the page displayed when you are logged in on your laptop but want to login using a QR code on your phone with magic link
 #
 @app.route("/logged-in-qr-login")
 def logged_in_qr_login():
-  return render_template(
-    "logged-out-qr-login.html"
-    )
-#
-# This is the page displayed when you are logged in on your laptop but want to login using a QR code on your phone with magic link
-#
-@app.route("/logged-in-qr-login-magic-link")
-def logged_in_qr_login_magic_link():
-  # this has the CSRF issue with the authlib. Depending on your library, you may be able to turn off CSRF protection.
+  # NOTE this has the CSRF issue with the authlib. Depending on your library, you may be able to turn off CSRF protection. Otherwise you'd need to implement the device grant the other way. (If the user is logged in on their laptop and wants to log in with the phone, the phone would need to start the grant and display a URL, the laptop would need to go to that URL, and the phone would need to poll the token endpoint to see when the laptop had completed the grant.)
 
   access_token = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME, None)
   refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME, None)
@@ -263,18 +239,10 @@ def logged_in_qr_login_magic_link():
   if access_token is None:
     return redirect(get_logout_url())
 
-  print(session.keys())
-  
-  st = 'abc'
   state = {}
-  s = oauth.FusionAuthMagicLink.create_authorization_url(
-    redirect_uri=url_for("callback", _scheme='https', _external=True)
-  )
-  print(s)
-  state['redirect_uri'] = url_for("callbackMagic", _scheme='https', _external=True)
+  state['redirect_uri'] = url_for("callback", _scheme='https', _external=True)
   state['client_id'] = env.get("CLIENT_ID")
   state['response_type'] = 'code'
-  state['state'] = st
   passwordless_request = {
     'loginId': user["email"],
     'applicationId': env.get("CLIENT_ID"),
@@ -296,9 +264,8 @@ def logged_in_qr_login_magic_link():
   qr.make(fit=True)
   qrimg = qr.make_image().to_string(encoding='unicode')
   return render_template(
-    "logged-in-qr-login-magic.html",
+    "logged-in-qr-login.html",
     qrimg=qrimg)
-
 
 #
 # Takes a dollar amount and converts it to change
@@ -351,8 +318,5 @@ def process_token(token, resp):
   return resp
 
 if __name__ == "__main__":
-  polling_thread = threading.Thread(target=poll_url, args=(stop_event,))
-  polling_thread.daemon = True
-  polling_thread.start()
   app.run(host="0.0.0.0", port=env.get("PORT", 5000))
 
