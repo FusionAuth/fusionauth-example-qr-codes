@@ -21,11 +21,13 @@ The `/complete-application` directory contains a fully working version of the ap
 
 ## Running Ngrok
 
-To run the application, first set up ngrok. You'll need two different ngrok servers, one for the flask app and one for the FusionAuth server. This is because both need to be accessible from your mobile device.
+To run the application, first set up ngrok. ngrok is a free developer tool which lets you expose applications running on localhost to the internet. Learn more at [ngrok.com](https://ngrok.com/).
 
-These instructions are for users with a free ngrok account.
+You'll need two different ngrok servers, one for the flask app and one for the FusionAuth server. This is because both need to be accessible from your mobile device.
 
-Add these to your ngrok.yml file:
+These instructions are for users with a free ngrok account. To run with multiple servers on a free account, you need to update your `ngrok.yml` file. You can find out where your config file lives by reading the [ngrok doc](https://ngrok.com/docs/agent/config/).
+
+Add these lines to your ngrok.yml file:
 
 ```
 tunnels:
@@ -37,9 +39,7 @@ tunnels:
     addr: 5000
 ```
 
-You can find out where your config file lives by reading the ngrok doc: https://ngrok.com/docs/agent/config/ 
-
-Now, start up the two servers by running
+Now, start up the two servers by running:
 
 ```shell
 ngrok start --all
