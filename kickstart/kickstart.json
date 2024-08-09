@@ -17,17 +17,6 @@
     {
       "key": "#{apiKey}",
       "description": "Unrestricted API key"
-    },
-    {
-      "key": "#{magicLinkApiKey}",
-      "description": "Ony used for starting magic link process",
-      "permissions": {
-        "endpoints": {
-          "/api/passwordless/start": [
-            "POST"
-          ]
-        }
-      }
     }
   ],
   "requests": [
