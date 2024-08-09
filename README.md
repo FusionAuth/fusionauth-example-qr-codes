@@ -58,6 +58,13 @@ You will need the forwarding URLs below.
 
 Update the `variables` section of `kickstart/kickstart.json`. Modify the `app_url` and `issuer_url` values to point to your ngrok URLs. The `app_url` is what forwards to port 5000 (the flask app) and the `issuer_url` is what forwards to port 9011 (the FusionAuth app).
 
+With the ngrok command output above, it would look like this:
+
+```
+    "issuer_url": "https://b27b-73-249-72-110.ngrok-free.app",
+    "app_url": "https://9184-73-249-72-110.ngrok-free.app",
+```
+
 Then, to run FusionAuth, stand up the docker containers using `docker-compose`.
 
 ```shell
@@ -74,6 +81,12 @@ Set up a Python virtual env and installing the project dependencies.
 python -m venv venv && \
 source venv/bin/activate && \
 pip install -r requirements.txt
+```
+
+Update the issuer value in `.env-flask` to match the value provided by ngrok. With the ngrok command output above, it would look like this:
+
+```
+ISSUER=https://b27b-73-249-72-110.ngrok-free.app
 ```
 
 Then use the `python` command to start up the application.
