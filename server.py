@@ -89,7 +89,7 @@ def home():
   return render_template("home.html")
 #end::homeRoute[]
 
-#end::deviceGrantFinished[]
+#tag::deviceGrantFinished[]
 @app.route("/device_grant_finished")
 def device_grant_finished():
     #print("device_grant_finished")
