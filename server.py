@@ -31,7 +31,6 @@ oauth.register(
   client_id=env.get("CLIENT_ID"),
   client_secret=env.get("CLIENT_SECRET"),
   client_kwargs={
-  ##  'verify': False,
     "scope": "openid email profile offline_access",
     'code_challenge_method': 'S256' # This enables PKCE
   },
@@ -40,22 +39,18 @@ oauth.register(
 
 client = FusionAuthClient("apikeynotneeded", env.get("ISSUER"))
 
-#tag::pollingSetup[]
+#tag::pollUrl[]
 polling_data = {'content': '', 'code': '', 'interval': 5}
 polling_lock = threading.Lock()
 stop_event = threading.Event()
 polling_thread = None
-#end::pollingSetup[]
 
 #tag::pollUrl[]
 def poll_url(stop_event):
-    #print("starting polling")
     while not stop_event.is_set():
         with polling_lock:
             interval = polling_data['interval']
         try:
-            #print("in polling loop")
-            #print(polling_data['code'])
             data = {
               "client_id": env.get("CLIENT_ID"),
               "device_code": polling_data['code'],
@@ -63,12 +58,8 @@ def poll_url(stop_event):
             }
 
             device_token_url = env.get("ISSUER")+'/oauth2/token'
-            #print("polling token endpoint")
-            #print(device_token_url)
             response = requests.post(device_token_url, headers={},data=data)
-            #print(response.json())
             if response.status_code == 200:
-              #print("request posted")
               polling_data['content'] = response.json()
         except Exception as e:
             polling_data['content'] = f"Error: {e}"
@@ -92,13 +83,11 @@ def home():
 #tag::deviceGrantFinished[]
 @app.route("/device_grant_finished")
 def device_grant_finished():
-    #print("device_grant_finished")
     content = ""
     with polling_lock:
       content = polling_data['content']
     try:
       if content != "":
-        #print("returning reload signal, stopping polling")
         stop_event.set() 
         if polling_thread != None:
           polling_thread.join()  # Wait for the thread to finish
@@ -113,7 +102,6 @@ def device_grant_finished():
 #tag::reload[]
 @app.route("/reload")
 def reload():
-    #print("reload")
     content = ""
     with polling_lock:
       content = polling_data['content']
@@ -131,7 +119,7 @@ def reload():
       content = ""
     # something has gone awry, but lets just send the user to / anyway. they won't be logged in
     return make_response(redirect("/"))
-#end::loginRoute[]
+#end::reload[]
 
 #tag::loginRoute[]
 @app.route("/login")
@@ -204,14 +192,11 @@ def logged_out_qr_login():
   }
   response = requests.post(device_start_url,headers={},data=data)
   verification_url_complete = response.json()['verification_uri_complete']
-  #print(verification_url_complete)
   device_code = response.json()['device_code']
-  #print(device_code)
 
   with polling_lock:
     polling_data['code'] = device_code
   try:
-    #print("in lock")
     print(polling_data['code'])
   except Exception as e:
     print(f"Error: {e}")
@@ -264,7 +249,7 @@ def make_change():
     logoutUrl=get_logout_url())
 #end::makeChangeRoute[]
 
-
+#tag::process_token[]
 def process_token(token, resp):
 
   resp.set_cookie(ACCESS_TOKEN_COOKIE_NAME, token["access_token"], max_age=token["expires_in"], httponly=True, samesite="Lax")
@@ -273,7 +258,7 @@ def process_token(token, resp):
   session["user"] = token["userinfo"]
 
   return resp
+#end::process_token[]
 
 if __name__ == "__main__":
   app.run(host="0.0.0.0", port=env.get("PORT", 5000))
-
