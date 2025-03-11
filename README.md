@@ -12,8 +12,6 @@ This application was built on top of the [Python/Flask Quickstart](https://fusio
 
 The `docker-compose.yml` file and the `kickstart` directory are used to start and configure a local FusionAuth server.
 
-The `/complete-application` directory contains a fully working version of the application.
-
 ## Project Dependencies
 * Docker, for running FusionAuth
 * Python 3.8 or later, for running the Changebank Python application
@@ -65,10 +63,10 @@ With the ngrok command output above, it would look like this:
     "app_url": "https://9184-73-249-72-110.ngrok-free.app",
 ```
 
-Then, to run FusionAuth, stand up the docker containers using `docker-compose`.
+Then, to run FusionAuth, stand up the docker containers using `docker compose`.
 
 ```shell
-docker-compose up
+docker compose up
 ```
 
 This will start a PostgreSQL database, and Elastic service, and the FusionAuth server.
