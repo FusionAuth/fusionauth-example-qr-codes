@@ -8,6 +8,12 @@ The scenario is if you have a logged in phone and a logged out computer. The pho
 
 This application was built on top of the [Python/Flask Quickstart](https://fusionauth.io/docs/quickstarts/quickstart-python-flask-web).
 
+## Results
+
+Here's an image of the QR code you can use to log in to the application from a logged in phone using the Device Code Grant.
+
+![Screenshot of example application in action](img/example-qr-code.png)
+
 ## Project Contents
 
 The `docker-compose.yml` file and the `kickstart` directory are used to start and configure a local FusionAuth server.
